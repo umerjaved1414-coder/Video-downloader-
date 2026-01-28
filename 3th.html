@@ -1,0 +1,1386 @@
+<!-- Continuing from the last script tag in previous part -->
+
+<script>
+    // ===== ADVANCED DOWNLOAD FEATURES =====
+    const advancedDownload = {
+        // File size estimation
+        estimateFileSize: function(url) {
+            return new Promise((resolve) => {
+                // For simulation, return random sizes based on file type
+                const fileType = utils.getFileType(url);
+                let size;
+                
+                switch(fileType) {
+                    case 'video':
+                        size = Math.floor(Math.random() * 100) + 50; // 50-150 MB
+                        break;
+                    case 'audio':
+                        size = Math.floor(Math.random() * 10) + 5; // 5-15 MB
+                        break;
+                    case 'image':
+                        size = Math.floor(Math.random() * 5) + 1; // 1-6 MB
+                        break;
+                    case 'document':
+                        size = Math.floor(Math.random() * 20) + 1; // 1-21 MB
+                        break;
+                    default:
+                        size = Math.floor(Math.random() * 50) + 1; // 1-51 MB
+                }
+                
+                // Add some delay to simulate network request
+                setTimeout(() => {
+                    resolve({
+                        size: size,
+                        formatted: utils.formatFileSize(size * 1024 * 1024)
+                    });
+                }, 800);
+            });
+        },
+
+        // Multiple URL processing
+        processMultipleUrls: function(urlsText) {
+            const urls = urlsText.split('\n')
+                .map(url => url.trim())
+                .filter(url => url && utils.isValidUrl(url));
+            
+            if (urls.length === 0) {
+                utils.showNotification('No valid URLs found', 'error');
+                return [];
+            }
+            
+            utils.showNotification(`Found ${urls.length} valid URLs`, 'success');
+            return urls;
+        },
+
+        // Platform-specific handlers
+        getPlatformHandler: function(url) {
+            const platform = utils.detectPlatform(url);
+            
+            const handlers = {
+                'YouTube': {
+                    icon: 'fab fa-youtube',
+                    color: '#FF0000',
+                    qualities: ['144p', '360p', '480p', '720p', '1080p']
+                },
+                'Instagram': {
+                    icon: 'fab fa-instagram',
+                    color: '#E4405F',
+                    qualities: ['SD', 'HD']
+                },
+                'Facebook': {
+                    icon: 'fab fa-facebook',
+                    color: '#1877F2',
+                    qualities: ['SD', 'HD']
+                },
+                'Twitter': {
+                    icon: 'fab fa-twitter',
+                    color: '#1DA1F2',
+                    qualities: ['SD']
+                },
+                'TikTok': {
+                    icon: 'fab fa-tiktok',
+                    color: '#000000',
+                    qualities: ['Watermark', 'No Watermark']
+                },
+                'Direct Link': {
+                    icon: 'fas fa-link',
+                    color: '#3742fa',
+                    qualities: ['Original']
+                }
+            };
+            
+            return handlers[platform] || handlers['Direct Link'];
+        },
+
+        // Create download link
+        createDownloadLink: function(url, filename) {
+            // This is a simulation - in a real app, this would be server-side processing
+            const a = document.createElement('a');
+            a.href = '#';
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            
+            // Simulate click for demo
+            a.click();
+            document.body.removeChild(a);
+            
+            return true;
+        },
+
+        // Check storage permission (WebView specific)
+        checkStoragePermission: function() {
+            return new Promise((resolve) => {
+                if (typeof Android !== 'undefined' && Android.requestStoragePermission) {
+                    Android.requestStoragePermission();
+                    setTimeout(() => resolve(true), 100);
+                } else {
+                    // For browser demo
+                    resolve(true);
+                }
+            });
+        },
+
+        // Generate thumbnail preview
+        generateThumbnail: function(url) {
+            // For demo, return a placeholder based on file type
+            const fileType = utils.getFileType(url);
+            const thumbnails = {
+                video: 'fas fa-film',
+                audio: 'fas fa-headphones',
+                image: 'fas fa-image',
+                document: 'fas fa-file-alt',
+                archive: 'fas fa-file-archive',
+                application: 'fas fa-cube'
+            };
+            
+            return thumbnails[fileType] || 'fas fa-file';
+        }
+    };
+
+    // ===== SETTINGS PANEL =====
+    const settingsManager = {
+        init: function() {
+            this.loadSettings();
+            this.setupEventListeners();
+            this.createSettingsPanel();
+        },
+
+        createSettingsPanel: function() {
+            // Create settings modal
+            const settingsModal = document.createElement('div');
+            settingsModal.className = 'settings-modal';
+            settingsModal.id = 'settingsModal';
+            settingsModal.innerHTML = `
+                <div class="settings-overlay" id="settingsOverlay"></div>
+                <div class="settings-content">
+                    <div class="settings-header">
+                        <h2><i class="fas fa-cog"></i> Settings</h2>
+                        <button class="settings-close" id="settingsClose">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="settings-body">
+                        <div class="settings-group">
+                            <h3><i class="fas fa-download"></i> Download Settings</h3>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Default Video Quality</label>
+                                    <p>Set preferred video quality for downloads</p>
+                                </div>
+                                <select class="setting-control" id="defaultQuality">
+                                    <option value="360p">360p (Low)</option>
+                                    <option value="480p">480p (SD)</option>
+                                    <option value="720p" selected>720p (HD)</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Default Audio Format</label>
+                                    <p>Preferred format for audio extraction</p>
+                                </div>
+                                <select class="setting-control" id="defaultFormat">
+                                    <option value="mp3" selected>MP3 (Best Quality)</option>
+                                    <option value="m4a">M4A (Good Quality)</option>
+                                    <option value="ogg">OGG (Small Size)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Auto-start Downloads</label>
+                                    <p>Start download immediately after analysis</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="autoDownload">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-group">
+                            <h3><i class="fas fa-user"></i> Privacy Settings</h3>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Clear History on Exit</label>
+                                    <p>Automatically clear download history when app closes</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="clearOnExit">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Ask Before Download</label>
+                                    <p>Show confirmation dialog before each download</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="askBeforeDownload">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-group">
+                            <h3><i class="fas fa-bell"></i> Notification Settings</h3>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Vibration Feedback</label>
+                                    <p>Vibrate on button presses and notifications</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="vibrationEnabled" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Download Complete Sound</label>
+                                    <p>Play sound when download finishes</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="soundEnabled">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-group">
+                            <h3><i class="fas fa-paint-brush"></i> Appearance</h3>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Theme</label>
+                                    <p>Choose app theme</p>
+                                </div>
+                                <select class="setting-control" id="themeSelect">
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="auto">Auto (System)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <label>Accent Color</label>
+                                    <p>Choose primary color</p>
+                                </div>
+                                <div class="color-picker">
+                                    <button class="color-option" data-color="#FF4757" style="background: #FF4757;"></button>
+                                    <button class="color-option" data-color="#3742fa" style="background: #3742fa;"></button>
+                                    <button class="color-option" data-color="#2ed573" style="background: #2ed573;"></button>
+                                    <button class="color-option" data-color="#ffa502" style="background: #ffa502;"></button>
+                                    <button class="color-option" data-color="#ff6b81" style="background: #ff6b81;"></button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button class="btn btn-secondary" id="resetSettings">
+                                <i class="fas fa-redo"></i> Reset to Default
+                            </button>
+                            <button class="btn btn-primary" id="saveSettings">
+                                <i class="fas fa-save"></i> Save Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(settingsModal);
+            this.addSettingsStyles();
+        },
+
+        addSettingsStyles: function() {
+            const style = document.createElement('style');
+            style.textContent = `
+                .settings-modal {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    z-index: 99999;
+                }
+                
+                .settings-modal.show {
+                    display: block;
+                    animation: fadeIn 0.3s ease;
+                }
+                
+                .settings-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    backdrop-filter: blur(5px);
+                }
+                
+                .settings-content {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 90%;
+                    max-width: 500px;
+                    max-height: 80vh;
+                    background: var(--card-color);
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    overflow: hidden;
+                    border: 1px solid var(--border-color);
+                }
+                
+                .settings-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 20px;
+                    border-bottom: 1px solid var(--border-color);
+                    background: var(--primary-color);
+                    color: white;
+                }
+                
+                .settings-header h2 {
+                    margin: 0;
+                    font-size: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .settings-close {
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    color: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background 0.2s;
+                }
+                
+                .settings-close:hover {
+                    background: rgba(255, 255, 255, 0.3);
+                }
+                
+                .settings-body {
+                    padding: 20px;
+                    overflow-y: auto;
+                    max-height: calc(80vh - 120px);
+                }
+                
+                .settings-group {
+                    margin-bottom: 30px;
+                }
+                
+                .settings-group h3 {
+                    margin: 0 0 15px 0;
+                    font-size: 16px;
+                    color: var(--primary-color);
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .setting-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 15px 0;
+                    border-bottom: 1px solid var(--border-color);
+                }
+                
+                .setting-item:last-child {
+                    border-bottom: none;
+                }
+                
+                .setting-info label {
+                    display: block;
+                    font-weight: 500;
+                    margin-bottom: 4px;
+                }
+                
+                .setting-info p {
+                    margin: 0;
+                    font-size: 14px;
+                    color: var(--text-secondary);
+                }
+                
+                .setting-control {
+                    padding: 10px 15px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    background: var(--bg-color);
+                    color: var(--text-primary);
+                    min-width: 140px;
+                }
+                
+                .switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 54px;
+                    height: 28px;
+                }
+                
+                .switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+                
+                .slider {
+                    position: absolute;
+                    cursor: pointer;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: var(--border-color);
+                    transition: .4s;
+                    border-radius: 34px;
+                }
+                
+                .slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 20px;
+                    width: 20px;
+                    left: 4px;
+                    bottom: 4px;
+                    background-color: white;
+                    transition: .4s;
+                    border-radius: 50%;
+                }
+                
+                input:checked + .slider {
+                    background-color: var(--primary-color);
+                }
+                
+                input:checked + .slider:before {
+                    transform: translateX(26px);
+                }
+                
+                .color-picker {
+                    display: flex;
+                    gap: 10px;
+                }
+                
+                .color-option {
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    border: 3px solid transparent;
+                    cursor: pointer;
+                    transition: transform 0.2s;
+                }
+                
+                .color-option.active {
+                    transform: scale(1.2);
+                    border-color: var(--text-primary);
+                }
+                
+                .color-option:hover {
+                    transform: scale(1.1);
+                }
+                
+                .settings-actions {
+                    display: flex;
+                    gap: 15px;
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid var(--border-color);
+                }
+                
+                .settings-actions .btn {
+                    flex: 1;
+                }
+                
+                @media (max-width: 480px) {
+                    .settings-content {
+                        width: 95%;
+                        max-height: 85vh;
+                    }
+                    
+                    .setting-item {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
+                    }
+                    
+                    .setting-control {
+                        width: 100%;
+                    }
+                    
+                    .settings-actions {
+                        flex-direction: column;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        },
+
+        showSettings: function() {
+            const modal = document.getElementById('settingsModal');
+            if (modal) {
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                utils.vibrate(30);
+            }
+        },
+
+        hideSettings: function() {
+            const modal = document.getElementById('settingsModal');
+            if (modal) {
+                modal.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+        },
+
+        loadSettings: function() {
+            const savedSettings = localStorage.getItem('snapdownload_settings');
+            if (savedSettings) {
+                try {
+                    const settings = JSON.parse(savedSettings);
+                    Object.assign(appState.settings, settings);
+                } catch (e) {
+                    console.error('Error loading settings:', e);
+                }
+            }
+        },
+
+        saveSettings: function() {
+            localStorage.setItem('snapdownload_settings', JSON.stringify(appState.settings));
+            utils.showNotification('Settings saved successfully!', 'success');
+            this.hideSettings();
+        },
+
+        resetSettings: function() {
+            if (confirm('Are you sure you want to reset all settings to default?')) {
+                appState.settings = {
+                    autoPaste: true,
+                    darkMode: false,
+                    vibration: true,
+                    soundEnabled: false,
+                    defaultQuality: '720p',
+                    defaultFormat: 'mp3',
+                    clearOnExit: false,
+                    askBeforeDownload: true,
+                    autoDownload: false
+                };
+                
+                localStorage.removeItem('snapdownload_settings');
+                this.updateSettingsUI();
+                utils.showNotification('Settings reset to default', 'success');
+            }
+        },
+
+        updateSettingsUI: function() {
+            // Update form controls with current settings
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            
+            const qualitySelect = modal.querySelector('#defaultQuality');
+            const formatSelect = modal.querySelector('#defaultFormat');
+            const autoDownload = modal.querySelector('#autoDownload');
+            const clearOnExit = modal.querySelector('#clearOnExit');
+            const askBeforeDownload = modal.querySelector('#askBeforeDownload');
+            const vibrationEnabled = modal.querySelector('#vibrationEnabled');
+            const soundEnabled = modal.querySelector('#soundEnabled');
+            const themeSelect = modal.querySelector('#themeSelect');
+            
+            if (qualitySelect) qualitySelect.value = appState.settings.defaultQuality;
+            if (formatSelect) formatSelect.value = appState.settings.defaultFormat;
+            if (autoDownload) autoDownload.checked = appState.settings.autoDownload;
+            if (clearOnExit) clearOnExit.checked = appState.settings.clearOnExit;
+            if (askBeforeDownload) askBeforeDownload.checked = appState.settings.askBeforeDownload;
+            if (vibrationEnabled) vibrationEnabled.checked = appState.settings.vibration;
+            if (soundEnabled) soundEnabled.checked = appState.settings.soundEnabled;
+            
+            // Update theme select
+            if (themeSelect) {
+                const savedTheme = localStorage.getItem('snapdownload_theme') || 'light';
+                themeSelect.value = savedTheme === 'dark' ? 'dark' : 
+                                  savedTheme === 'auto' ? 'auto' : 'light';
+            }
+            
+            // Update active color
+            const primaryColor = getComputedStyle(document.documentElement)
+                .getPropertyValue('--primary-color').trim();
+            const colorOptions = modal.querySelectorAll('.color-option');
+            colorOptions.forEach(option => {
+                if (option.dataset.color === primaryColor) {
+                    option.classList.add('active');
+                } else {
+                    option.classList.remove('active');
+                }
+            });
+        },
+
+        setupEventListeners: function() {
+            // Settings navigation
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('[data-nav="settings"]')) {
+                    this.showSettings();
+                    this.updateSettingsUI();
+                }
+            });
+            
+            // Close settings
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'settingsOverlay' || 
+                    e.target.id === 'settingsClose' ||
+                    e.target.closest('#settingsClose')) {
+                    this.hideSettings();
+                }
+            });
+            
+            // Save settings
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'saveSettings' || 
+                    e.target.closest('#saveSettings')) {
+                    this.handleSaveSettings();
+                }
+            });
+            
+            // Reset settings
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'resetSettings' || 
+                    e.target.closest('#resetSettings')) {
+                    this.resetSettings();
+                }
+            });
+            
+            // Color picker
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('color-option')) {
+                    const color = e.target.dataset.color;
+                    this.changeAccentColor(color);
+                    
+                    // Update active state
+                    document.querySelectorAll('.color-option').forEach(opt => {
+                        opt.classList.remove('active');
+                    });
+                    e.target.classList.add('active');
+                }
+            });
+            
+            // Escape key to close settings
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.hideSettings();
+                }
+            });
+        },
+
+        handleSaveSettings: function() {
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            
+            // Get values from form
+            appState.settings.defaultQuality = modal.querySelector('#defaultQuality').value;
+            appState.settings.defaultFormat = modal.querySelector('#defaultFormat').value;
+            appState.settings.autoDownload = modal.querySelector('#autoDownload').checked;
+            appState.settings.clearOnExit = modal.querySelector('#clearOnExit').checked;
+            appState.settings.askBeforeDownload = modal.querySelector('#askBeforeDownload').checked;
+            appState.settings.vibration = modal.querySelector('#vibrationEnabled').checked;
+            appState.settings.soundEnabled = modal.querySelector('#soundEnabled').checked;
+            
+            const themeSelect = modal.querySelector('#themeSelect');
+            if (themeSelect) {
+                const theme = themeSelect.value;
+                if (theme === 'auto') {
+                    // Auto theme based on system preference
+                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    appState.currentTheme = prefersDark ? 'dark' : 'light';
+                } else {
+                    appState.currentTheme = theme;
+                }
+                themeManager.applyTheme();
+            }
+            
+            this.saveSettings();
+        },
+
+        changeAccentColor: function(color) {
+            document.documentElement.style.setProperty('--primary-color', color);
+            
+            // Calculate darker shade for --primary-dark
+            const darkerColor = this.darkenColor(color, 20);
+            document.documentElement.style.setProperty('--primary-dark', darkerColor);
+            
+            // Update header background
+            const header = document.querySelector('.app-header');
+            if (header) {
+                header.style.backgroundColor = color;
+            }
+            
+            utils.vibrate(20);
+        },
+
+        darkenColor: function(color, percent) {
+            // Simple color darkening for demo
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) - amt;
+            const G = (num >> 8 & 0x00FF) - amt;
+            const B = (num & 0x0000FF) - amt;
+            
+            return '#' + (
+                0x1000000 +
+                (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+                (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+                (B < 255 ? (B < 1 ? 0 : B) : 255)
+            ).toString(16).slice(1);
+        }
+    };
+
+    // ===== MULTI-LINK INPUT =====
+    const multiLinkManager = {
+        init: function() {
+            this.createMultiLinkUI();
+            this.setupEventListeners();
+        },
+
+        createMultiLinkUI: function() {
+            // Add multi-link button to URL section
+            const urlSection = document.querySelector('.url-section');
+            const actionButtons = urlSection.querySelector('.action-buttons');
+            
+            const multiLinkBtn = document.createElement('button');
+            multiLinkBtn.className = 'btn btn-secondary';
+            multiLinkBtn.id = 'multiLinkBtn';
+            multiLinkBtn.innerHTML = '<i class="fas fa-list"></i> Multiple Links';
+            
+            actionButtons.appendChild(multiLinkBtn);
+            
+            // Create multi-link modal
+            const multiLinkModal = document.createElement('div');
+            multiLinkModal.className = 'multi-link-modal';
+            multiLinkModal.id = 'multiLinkModal';
+            multiLinkModal.innerHTML = `
+                <div class="multi-link-overlay" id="multiLinkOverlay"></div>
+                <div class="multi-link-content">
+                    <div class="multi-link-header">
+                        <h2><i class="fas fa-link"></i> Multiple Links</h2>
+                        <button class="multi-link-close" id="multiLinkClose">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="multi-link-body">
+                        <p>Enter multiple URLs (one per line):</p>
+                        <textarea class="multi-link-textarea" 
+                                  placeholder="https://example.com/video1.mp4&#10;https://example.com/image1.jpg&#10;https://example.com/file.pdf"
+                                  rows="8"></textarea>
+                        <div class="multi-link-stats">
+                            <span id="linkCount">0 links detected</span>
+                            <span id="validCount">0 valid</span>
+                        </div>
+                        <div class="multi-link-actions">
+                            <button class="btn btn-secondary" id="clearMultiLinks">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                            <button class="btn btn-primary" id="processMultiLinks">
+                                <i class="fas fa-plus-circle"></i> Add to Queue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(multiLinkModal);
+            this.addMultiLinkStyles();
+        },
+
+        addMultiLinkStyles: function() {
+            const style = document.createElement('style');
+            style.textContent = `
+                .multi-link-modal {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    z-index: 99999;
+                }
+                
+                .multi-link-modal.show {
+                    display: block;
+                    animation: fadeIn 0.3s ease;
+                }
+                
+                .multi-link-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    backdrop-filter: blur(5px);
+                }
+                
+                .multi-link-content {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 90%;
+                    max-width: 500px;
+                    background: var(--card-color);
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    overflow: hidden;
+                    border: 1px solid var(--border-color);
+                }
+                
+                .multi-link-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 20px;
+                    border-bottom: 1px solid var(--border-color);
+                    background: var(--primary-color);
+                    color: white;
+                }
+                
+                .multi-link-header h2 {
+                    margin: 0;
+                    font-size: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .multi-link-close {
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    color: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background 0.2s;
+                }
+                
+                .multi-link-close:hover {
+                    background: rgba(255, 255, 255, 0.3);
+                }
+                
+                .multi-link-body {
+                    padding: 20px;
+                }
+                
+                .multi-link-textarea {
+                    width: 100%;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border: 2px solid var(--border-color);
+                    border-radius: 12px;
+                    background: var(--bg-color);
+                    color: var(--text-primary);
+                    font-family: 'Roboto', sans-serif;
+                    font-size: 16px;
+                    resize: vertical;
+                    min-height: 200px;
+                }
+                
+                .multi-link-textarea:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                }
+                
+                .multi-link-stats {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 14px;
+                    color: var(--text-secondary);
+                    margin-bottom: 20px;
+                }
+                
+                .multi-link-actions {
+                    display: flex;
+                    gap: 15px;
+                }
+                
+                .multi-link-actions .btn {
+                    flex: 1;
+                }
+                
+                @media (max-width: 480px) {
+                    .multi-link-content {
+                        width: 95%;
+                    }
+                    
+                    .multi-link-actions {
+                        flex-direction: column;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        },
+
+        showMultiLinkModal: function() {
+            const modal = document.getElementById('multiLinkModal');
+            if (modal) {
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                
+                // Focus the textarea
+                const textarea = modal.querySelector('.multi-link-textarea');
+                if (textarea) {
+                    textarea.focus();
+                    
+                    // Auto-paste if clipboard has multiple lines
+                    navigator.clipboard.readText().then(text => {
+                        if (text.includes('\n') && text.trim().split('\n').length > 1) {
+                            textarea.value = text;
+                            this.updateLinkStats();
+                        }
+                    }).catch(() => {});
+                }
+                
+                utils.vibrate(30);
+            }
+        },
+
+        hideMultiLinkModal: function() {
+            const modal = document.getElementById('multiLinkModal');
+            if (modal) {
+                modal.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+        },
+
+        updateLinkStats: function() {
+            const modal = document.getElementById('multiLinkModal');
+            if (!modal) return;
+            
+            const textarea = modal.querySelector('.multi-link-textarea');
+            const linkCount = modal.querySelector('#linkCount');
+            const validCount = modal.querySelector('#validCount');
+            
+            if (!textarea || !linkCount || !validCount) return;
+            
+            const lines = textarea.value.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            const validLinks = lines.filter(line => utils.isValidUrl(line));
+            
+            linkCount.textContent = `${lines.length} link${lines.length !== 1 ? 's' : ''} detected`;
+            validCount.textContent = `${validLinks.length} valid`;
+            
+            // Color coding
+            validCount.style.color = validLinks.length > 0 ? '#2ed573' : '#ff4757';
+        },
+
+        processMultiLinks: function() {
+            const modal = document.getElementById('multiLinkModal');
+            if (!modal) return;
+            
+            const textarea = modal.querySelector('.multi-link-textarea');
+            if (!textarea) return;
+            
+            const urls = advancedDownload.processMultipleUrls(textarea.value);
+            
+            if (urls.length > 0) {
+                urls.forEach(url => {
+                    const fileType = utils.getFileType(url);
+                    const filename = utils.extractFileName(url);
+                    const platform = utils.detectPlatform(url);
+                    
+                    downloadManager.addToQueue({
+                        id: Date.now() + Math.random(),
+                        url: url,
+                        filename: filename,
+                        type: fileType,
+                        platform: platform,
+                        status: 'pending',
+                        addedAt: new Date().toLocaleTimeString()
+                    });
+                });
+                
+                this.hideMultiLinkModal();
+                textarea.value = '';
+                utils.showNotification(`Added ${urls.length} links to queue`, 'success');
+                
+                // Switch to queue view
+                navigationManager.switchNav('queue');
+            }
+        },
+
+        setupEventListeners: function() {
+            // Show multi-link modal
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'multiLinkBtn' || 
+                    e.target.closest('#multiLinkBtn')) {
+                    this.showMultiLinkModal();
+                }
+            });
+            
+            // Close modal
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'multiLinkOverlay' || 
+                    e.target.id === 'multiLinkClose' ||
+                    e.target.closest('#multiLinkClose')) {
+                    this.hideMultiLinkModal();
+                }
+            });
+            
+            // Process links
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'processMultiLinks' || 
+                    e.target.closest('#processMultiLinks')) {
+                    this.processMultiLinks();
+                }
+            });
+            
+            // Clear textarea
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'clearMultiLinks' || 
+                    e.target.closest('#clearMultiLinks')) {
+                    const modal = document.getElementById('multiLinkModal');
+                    if (modal) {
+                        const textarea = modal.querySelector('.multi-link-textarea');
+                        if (textarea) {
+                            textarea.value = '';
+                            this.updateLinkStats();
+                            utils.vibrate(20);
+                        }
+                    }
+                }
+            });
+            
+            // Update stats on input
+            document.addEventListener('input', (e) => {
+                if (e.target.classList.contains('multi-link-textarea')) {
+                    this.updateLinkStats();
+                }
+            });
+        }
+    };
+
+    // ===== NETWORK & OFFLINE HANDLING =====
+    const networkManager = {
+        init: function() {
+            this.setupEventListeners();
+            this.checkConnection();
+        },
+
+        checkConnection: function() {
+            const isOnline = navigator.onLine;
+            if (!isOnline) {
+                this.showOfflineMessage();
+            }
+            return isOnline;
+        },
+
+        showOfflineMessage: function() {
+            utils.showNotification('You are offline. Some features may not work.', 'warning', 5000);
+        },
+
+        showOnlineMessage: function() {
+            utils.showNotification('Back online!', 'success');
+        },
+
+        setupEventListeners: function() {
+            window.addEventListener('online', () => {
+                this.showOnlineMessage();
+            });
+            
+            window.addEventListener('offline', () => {
+                this.showOfflineMessage();
+            });
+        }
+    };
+
+    // ===== ENHANCED ERROR HANDLING =====
+    const errorHandler = {
+        init: function() {
+            this.setupGlobalHandlers();
+        },
+
+        setupGlobalHandlers: function() {
+            // Handle unhandled promise rejections
+            window.addEventListener('unhandledrejection', (event) => {
+                console.error('Unhandled rejection:', event.reason);
+                utils.showNotification('An unexpected error occurred', 'error');
+                event.preventDefault();
+            });
+            
+            // Handle invalid URLs
+            document.addEventListener('invalidurl', (e) => {
+                utils.showNotification(`Invalid URL: ${e.detail.url}`, 'error');
+            });
+            
+            // Handle download errors
+            document.addEventListener('downloaderror', (e) => {
+                const error = e.detail.error;
+                let message = 'Download failed';
+                
+                if (error.includes('network')) {
+                    message = 'Network error. Check your connection.';
+                } else if (error.includes('unsupported')) {
+                    message = 'This platform is not supported.';
+                } else if (error.includes('permission')) {
+                    message = 'Storage permission denied.';
+                }
+                
+                utils.showNotification(message, 'error');
+            });
+        },
+
+        showErrorDialog: function(title, message, retryCallback = null) {
+            const dialog = document.createElement('div');
+            dialog.className = 'error-dialog';
+            dialog.innerHTML = `
+                <div class="error-overlay"></div>
+                <div class="error-content">
+                    <div class="error-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="error-actions">
+                        ${retryCallback ? `
+                            <button class="btn btn-secondary error-cancel">Cancel</button>
+                            <button class="btn btn-primary error-retry">Retry</button>
+                        ` : `
+                            <button class="btn btn-primary error-ok">OK</button>
+                        `}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(dialog);
+            
+            // Add styles
+            if (!document.querySelector('#error-styles')) {
+                const style = document.createElement('style');
+                style.id = 'error-styles';
+                style.textContent = `
+                    .error-dialog {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        z-index: 99999;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        animation: fadeIn 0.3s ease;
+                    }
+                    
+                    .error-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0, 0, 0, 0.7);
+                        backdrop-filter: blur(5px);
+                    }
+                    
+                    .error-content {
+                        position: relative;
+                        background: var(--card-color);
+                        border-radius: 20px;
+                        padding: 30px;
+                        text-align: center;
+                        max-width: 400px;
+                        width: 90%;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                        border: 1px solid var(--border-color);
+                    }
+                    
+                    .error-icon {
+                        font-size: 60px;
+                        color: #ffa502;
+                        margin-bottom: 20px;
+                    }
+                    
+                    .error-content h3 {
+                        margin: 0 0 15px 0;
+                        color: var(--text-primary);
+                    }
+                    
+                    .error-content p {
+                        margin: 0 0 25px 0;
+                        color: var(--text-secondary);
+                        line-height: 1.5;
+                    }
+                    
+                    .error-actions {
+                        display: flex;
+                        gap: 15px;
+                        justify-content: center;
+                    }
+                    
+                    .error-actions .btn {
+                        min-width: 100px;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // Event listeners
+            setTimeout(() => {
+                const overlay = dialog.querySelector('.error-overlay');
+                const cancelBtn = dialog.querySelector('.error-cancel');
+                const retryBtn = dialog.querySelector('.error-retry');
+                const okBtn = dialog.querySelector('.error-ok');
+                
+                const removeDialog = () => {
+                    dialog.remove();
+                };
+                
+                if (overlay) overlay.addEventListener('click', removeDialog);
+                if (cancelBtn) cancelBtn.addEventListener('click', removeDialog);
+                if (okBtn) okBtn.addEventListener('click', removeDialog);
+                
+                if (retryBtn && retryCallback) {
+                    retryBtn.addEventListener('click', () => {
+                        removeDialog();
+                        retryCallback();
+                    });
+                }
+            }, 100);
+        }
+    };
+
+    // ===== FINAL INITIALIZATION =====
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize new managers
+        settingsManager.init();
+        multiLinkManager.init();
+        networkManager.init();
+        errorHandler.init();
+        
+        // Enhance download manager with advanced features
+        Object.assign(downloadManager, advancedDownload);
+        
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + Enter to analyze
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                downloadManager.analyzeUrl();
+            }
+            
+            // Ctrl/Cmd + S for settings
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                settingsManager.showSettings();
+            }
+            
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                settingsManager.hideSettings();
+                multiLinkManager.hideMultiLinkModal();
+            }
+        });
+        
+        // Add app version and info
+        const appInfo = document.createElement('div');
+        appInfo.className = 'app-info';
+        appInfo.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 14px;">
+                <p>SnapDownload v1.0.0 | All-in-One Media Downloader</p>
+                <p style="margin-top: 10px; opacity: 0.7;">
+                    <i class="fas fa-mobile-alt"></i> Optimized for Android WebView
+                </p>
+            </div>
+        `;
+        document.querySelector('.main-content').appendChild(appInfo);
+        
+        // Add some sample data for demo
+        setTimeout(() => {
+            if (appState.downloadHistory.length === 0) {
+                // Add sample history items
+                const sampleHistory = [
+                    {
+                        id: 1,
+                        filename: 'sample_video.mp4',
+                        type: 'video',
+                        platform: 'YouTube',
+                        downloadedAt: new Date(Date.now() - 86400000).toLocaleString(),
+                        url: 'https://example.com/sample.mp4'
+                    },
+                    {
+                        id: 2,
+                        filename: 'beautiful_image.jpg',
+                        type: 'image',
+                        platform: 'Instagram',
+                        downloadedAt: new Date(Date.now() - 172800000).toLocaleString(),
+                        url: 'https://example.com/image.jpg'
+                    }
+                ];
+                
+                appState.downloadHistory.push(...sampleHistory);
+                downloadManager.renderHistory();
+            }
+        }, 2000);
+        
+        console.log('SnapDownload App fully loaded with all features');
+        utils.showNotification('App ready! Start downloading media.', 'success');
+        
+        // Check for updates (simulated)
+        setTimeout(() => {
+            if (Math.random() > 0.7) { // 30% chance
+                utils.showNotification('New update available! Check settings.', 'info', 5000);
+            }
+        }, 10000);
+    });
+
+    // ===== ANDROID WEBVIEW INTEGRATION =====
+    // These functions will be called from Android WebView if needed
+    window.onDownloadComplete = function(filename) {
+        utils.showNotification(`${filename} saved to device`, 'success');
+    };
+
+    window.onDownloadError = function(error) {
+        errorHandler.showErrorDialog('Download Failed', error, () => {
+            downloadManager.startQueueDownload();
+        });
+    };
+
+    window.onBackPressed = function() {
+        // Handle Android back button
+        if (document.getElementById('settingsModal').classList.contains('show')) {
+            settingsManager.hideSettings();
+            return false; // Don't exit app
+        }
+        
+        if (document.getElementById('multiLinkModal').classList.contains('show')) {
+            multiLinkManager.hideMultiLinkModal();
+            return false; // Don't exit app
+        }
+        
+        return true; // Allow exit
+    };
+
+    // Make app state available for debugging
+    window.appState = appState;
+    window.utils = utils;
+</script>
+</body>
+</html>
