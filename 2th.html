@@ -1,0 +1,1015 @@
+<!-- Continuing from the last script tag in the previous HTML file -->
+
+<script>
+    // ===== APP STATE MANAGEMENT =====
+    const appState = {
+        currentMode: 'video',
+        currentTheme: 'light',
+        isPrivateMode: false,
+        downloadQueue: [],
+        downloadHistory: [],
+        currentDownload: null,
+        settings: {
+            autoPaste: true,
+            darkMode: false,
+            vibration: true,
+            defaultQuality: '720p',
+            defaultFormat: 'mp3'
+        }
+    };
+
+    // ===== DOM ELEMENTS =====
+    const elements = {
+        // Theme & Mode
+        themeToggle: document.getElementById('themeToggle'),
+        privateToggle: document.getElementById('privateToggle'),
+        body: document.body,
+        
+        // Navigation
+        modeTabs: document.querySelectorAll('.mode-tab'),
+        navItems: document.querySelectorAll('.nav-item'),
+        
+        // Content Cards
+        contentCards: {
+            video: document.getElementById('videoCard'),
+            audio: document.getElementById('audioCard'),
+            image: document.getElementById('imageCard'),
+            file: document.getElementById('fileCard')
+        },
+        
+        // URL Input
+        urlInput: document.getElementById('urlInput'),
+        pasteBtn: document.getElementById('pasteBtn'),
+        analyzeBtn: document.getElementById('analyzeBtn'),
+        queueBtn: document.getElementById('queueBtn'),
+        
+        // Download Buttons
+        downloadVideoBtn: document.getElementById('downloadVideoBtn'),
+        downloadAudioBtn: document.getElementById('downloadAudioBtn'),
+        downloadImageBtn: document.getElementById('downloadImageBtn'),
+        downloadFileBtn: document.getElementById('downloadFileBtn'),
+        
+        // Quality Selectors
+        qualityBtns: document.querySelectorAll('.quality-btn'),
+        progressFill: document.getElementById('progressFill'),
+        progressPercent: document.getElementById('progressPercent'),
+        
+        // Queue Management
+        queueList: document.getElementById('queueList'),
+        queueSection: document.getElementById('queueSection'),
+        startQueueBtn: document.getElementById('startQueueBtn'),
+        clearQueueBtn: document.getElementById('clearQueueBtn'),
+        
+        // History Management
+        historyList: document.getElementById('historyList'),
+        historySection: document.getElementById('historySection'),
+        clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+        
+        // Preview Elements
+        imagePreview: document.getElementById('imagePreview'),
+        previewImageBtn: document.getElementById('previewImageBtn'),
+        fileInfo: document.getElementById('fileInfo'),
+        
+        // UI Components
+        loader: document.getElementById('loader'),
+        notification: document.getElementById('notification'),
+        notificationText: document.getElementById('notificationText')
+    };
+
+    // ===== UTILITY FUNCTIONS =====
+    const utils = {
+        // Vibrate if supported
+        vibrate: function(pattern = 50) {
+            if (appState.settings.vibration && navigator.vibrate) {
+                navigator.vibrate(pattern);
+            }
+        },
+
+        // Show notification
+        showNotification: function(message, type = 'info', duration = 3000) {
+            elements.notificationText.textContent = message;
+            
+            // Set icon based on type
+            const icon = elements.notification.querySelector('.notification-icon');
+            switch(type) {
+                case 'success':
+                    icon.className = 'fas fa-check-circle notification-icon';
+                    icon.style.color = '#2ed573';
+                    break;
+                case 'error':
+                    icon.className = 'fas fa-times-circle notification-icon';
+                    icon.style.color = '#ff4757';
+                    break;
+                case 'warning':
+                    icon.className = 'fas fa-exclamation-triangle notification-icon';
+                    icon.style.color = '#ffa502';
+                    break;
+                default:
+                    icon.className = 'fas fa-info-circle notification-icon';
+                    icon.style.color = '#3742fa';
+            }
+
+            elements.notification.classList.add('show');
+            utils.vibrate(30);
+
+            setTimeout(() => {
+                elements.notification.classList.remove('show');
+            }, duration);
+        },
+
+        // Show loader
+        showLoader: function(message = 'Processing...') {
+            elements.loader.querySelector('.loader-text').textContent = message;
+            elements.loader.classList.add('show');
+        },
+
+        // Hide loader
+        hideLoader: function() {
+            elements.loader.classList.remove('show');
+        },
+
+        // Update progress bar
+        updateProgress: function(percent) {
+            elements.progressFill.style.width = `${percent}%`;
+            elements.progressPercent.textContent = `${Math.round(percent)}%`;
+        },
+
+        // Format file size
+        formatFileSize: function(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
+        // Get file type from URL
+        getFileType: function(url) {
+            const extension = url.split('.').pop().toLowerCase().split('?')[0];
+            
+            const fileTypes = {
+                // Video
+                'mp4': 'video', 'avi': 'video', 'mkv': 'video', 'mov': 'video',
+                'wmv': 'video', 'flv': 'video', 'webm': 'video',
+                
+                // Audio
+                'mp3': 'audio', 'wav': 'audio', 'ogg': 'audio', 'm4a': 'audio',
+                'flac': 'audio', 'aac': 'audio',
+                
+                // Images
+                'jpg': 'image', 'jpeg': 'image', 'png': 'image', 'gif': 'image',
+                'webp': 'image', 'bmp': 'image', 'svg': 'image',
+                
+                // Documents
+                'pdf': 'document', 'doc': 'document', 'docx': 'document',
+                'xls': 'document', 'xlsx': 'document', 'ppt': 'document',
+                'pptx': 'document', 'txt': 'document',
+                
+                // Archives
+                'zip': 'archive', 'rar': 'archive', '7z': 'archive', 'tar': 'archive',
+                
+                // Apps
+                'apk': 'application', 'exe': 'application'
+            };
+            
+            return fileTypes[extension] || 'file';
+        },
+
+        // Get platform from URL
+        detectPlatform: function(url) {
+            const platforms = {
+                'youtube.com': 'YouTube',
+                'youtu.be': 'YouTube',
+                'facebook.com': 'Facebook',
+                'instagram.com': 'Instagram',
+                'twitter.com': 'Twitter',
+                'tiktok.com': 'TikTok',
+                'whatsapp.com': 'WhatsApp',
+                'pinterest.com': 'Pinterest',
+                'reddit.com': 'Reddit',
+                'linkedin.com': 'LinkedIn',
+                'drive.google.com': 'Google Drive',
+                'dropbox.com': 'Dropbox',
+                'vimeo.com': 'Vimeo',
+                'dailymotion.com': 'Dailymotion'
+            };
+            
+            for (const [domain, platform] of Object.entries(platforms)) {
+                if (url.includes(domain)) {
+                    return platform;
+                }
+            }
+            
+            return 'Direct Link';
+        },
+
+        // Validate URL
+        isValidUrl: function(url) {
+            try {
+                new URL(url);
+                return true;
+            } catch {
+                return false;
+            }
+        },
+
+        // Extract filename from URL
+        extractFileName: function(url) {
+            try {
+                const urlObj = new URL(url);
+                const pathname = urlObj.pathname;
+                const filename = pathname.substring(pathname.lastIndexOf('/') + 1);
+                
+                if (filename && filename.includes('.')) {
+                    return decodeURIComponent(filename.split('?')[0]);
+                }
+                
+                return `download_${Date.now()}`;
+            } catch {
+                return `download_${Date.now()}`;
+            }
+        },
+
+        // Simulate download
+        simulateDownload: function(filename, fileType) {
+            return new Promise((resolve) => {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 10;
+                    utils.updateProgress(progress);
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        utils.updateProgress(100);
+                        setTimeout(() => {
+                            utils.showNotification(`${filename} downloaded successfully!`, 'success');
+                            resolve();
+                        }, 500);
+                    }
+                }, 100);
+            });
+        }
+    };
+
+    // ===== THEME MANAGEMENT =====
+    const themeManager = {
+        init: function() {
+            // Load saved theme
+            const savedTheme = localStorage.getItem('snapdownload_theme');
+            if (savedTheme) {
+                appState.currentTheme = savedTheme;
+                appState.settings.darkMode = savedTheme === 'dark';
+            }
+            
+            this.applyTheme();
+            this.setupEventListeners();
+        },
+
+        applyTheme: function() {
+            elements.body.setAttribute('data-theme', appState.currentTheme);
+            
+            // Update theme toggle icon
+            const themeIcon = elements.themeToggle.querySelector('i');
+            if (appState.currentTheme === 'dark') {
+                themeIcon.className = 'fas fa-sun';
+                elements.themeToggle.title = 'Switch to Light Mode';
+            } else {
+                themeIcon.className = 'fas fa-moon';
+                elements.themeToggle.title = 'Switch to Dark Mode';
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('snapdownload_theme', appState.currentTheme);
+        },
+
+        toggleTheme: function() {
+            appState.currentTheme = appState.currentTheme === 'light' ? 'dark' : 'light';
+            appState.settings.darkMode = appState.currentTheme === 'dark';
+            this.applyTheme();
+            utils.vibrate();
+            utils.showNotification(`${appState.currentTheme === 'dark' ? 'Dark' : 'Light'} mode activated`);
+        },
+
+        setupEventListeners: function() {
+            elements.themeToggle.addEventListener('click', () => this.toggleTheme());
+        }
+    };
+
+    // ===== PRIVATE MODE MANAGEMENT =====
+    const privacyManager = {
+        init: function() {
+            this.setupEventListeners();
+        },
+
+        togglePrivateMode: function() {
+            appState.isPrivateMode = !appState.isPrivateMode;
+            
+            // Update UI
+            elements.privateToggle.classList.toggle('private-active', appState.isPrivateMode);
+            
+            // Update icon
+            const icon = elements.privateToggle.querySelector('i');
+            if (appState.isPrivateMode) {
+                icon.className = 'fas fa-user-secret';
+                elements.privateToggle.title = 'Private Mode: ON';
+                utils.showNotification('Private mode enabled - No history will be saved', 'info');
+            } else {
+                icon.className = 'fas fa-user';
+                elements.privateToggle.title = 'Private Mode: OFF';
+                utils.showNotification('Private mode disabled', 'info');
+            }
+            
+            utils.vibrate();
+        },
+
+        setupEventListeners: function() {
+            elements.privateToggle.addEventListener('click', () => this.togglePrivateMode());
+        }
+    };
+
+    // ===== MODE SELECTION =====
+    const modeManager = {
+        init: function() {
+            this.setupEventListeners();
+            this.switchMode('video');
+        },
+
+        switchMode: function(mode) {
+            // Update state
+            appState.currentMode = mode;
+            
+            // Update active tab
+            elements.modeTabs.forEach(tab => {
+                if (tab.dataset.mode === mode) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            // Show active card
+            Object.keys(elements.contentCards).forEach(key => {
+                if (key === mode) {
+                    elements.contentCards[key].classList.add('active');
+                } else {
+                    elements.contentCards[key].classList.remove('active');
+                }
+            });
+            
+            // Update URL input placeholder based on mode
+            const placeholders = {
+                video: 'Paste video link (YouTube, Facebook, Instagram, etc.)...',
+                audio: 'Paste audio or video link to extract audio...',
+                image: 'Paste image link (JPG, PNG, GIF, etc.)...',
+                file: 'Paste file link (PDF, ZIP, APK, DOC, etc.)...'
+            };
+            elements.urlInput.placeholder = placeholders[mode] || 'Paste link here...';
+            
+            utils.vibrate(20);
+        },
+
+        setupEventListeners: function() {
+            elements.modeTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    this.switchMode(tab.dataset.mode);
+                });
+            });
+        }
+    };
+
+    // ===== NAVIGATION MANAGEMENT =====
+    const navigationManager = {
+        init: function() {
+            this.setupEventListeners();
+        },
+
+        switchNav: function(nav) {
+            // Update active nav item
+            elements.navItems.forEach(item => {
+                if (item.dataset.nav === nav) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // Show/hide sections based on nav
+            switch(nav) {
+                case 'home':
+                    document.querySelector('.main-content').scrollTo({ top: 0, behavior: 'smooth' });
+                    break;
+                    
+                case 'queue':
+                    elements.queueSection.scrollIntoView({ behavior: 'smooth' });
+                    break;
+                    
+                case 'history':
+                    elements.historySection.scrollIntoView({ behavior: 'smooth' });
+                    break;
+                    
+                case 'settings':
+                    // Will be implemented in next part
+                    utils.showNotification('Settings section coming soon', 'info');
+                    break;
+            }
+            
+            utils.vibrate(20);
+        },
+
+        setupEventListeners: function() {
+            elements.navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    this.switchNav(item.dataset.nav);
+                });
+            });
+        }
+    };
+
+    // ===== URL ANALYSIS & DOWNLOAD =====
+    const downloadManager = {
+        init: function() {
+            this.setupEventListeners();
+            this.loadHistory();
+        },
+
+        analyzeUrl: function() {
+            const url = elements.urlInput.value.trim();
+            
+            if (!url) {
+                utils.showNotification('Please enter a URL', 'error');
+                elements.urlInput.focus();
+                return;
+            }
+            
+            if (!utils.isValidUrl(url)) {
+                utils.showNotification('Please enter a valid URL', 'error');
+                return;
+            }
+            
+            utils.showLoader('Analyzing link...');
+            utils.vibrate();
+            
+            // Simulate analysis delay
+            setTimeout(() => {
+                const fileType = utils.getFileType(url);
+                const platform = utils.detectPlatform(url);
+                const filename = utils.extractFileName(url);
+                
+                utils.hideLoader();
+                
+                // Auto-switch to appropriate mode based on file type
+                if (fileType === 'video') {
+                    modeManager.switchMode('video');
+                } else if (fileType === 'audio') {
+                    modeManager.switchMode('audio');
+                } else if (fileType === 'image') {
+                    modeManager.switchMode('image');
+                    this.updateImagePreview(url);
+                } else {
+                    modeManager.switchMode('file');
+                    this.updateFileInfo(url, filename, fileType);
+                }
+                
+                utils.showNotification(`Detected: ${platform} - ${fileType.toUpperCase()}`, 'success');
+            }, 1500);
+        },
+
+        updateImagePreview: function(url) {
+            const previewHtml = `
+                <img src="${url}" alt="Preview" 
+                     style="max-width: 100%; border-radius: 8px; max-height: 300px; object-fit: contain;">
+                <p class="mt-10">Preview loaded. Long press to save.</p>
+            `;
+            elements.imagePreview.innerHTML = previewHtml;
+        },
+
+        updateFileInfo: function(url, filename, fileType) {
+            const icons = {
+                'video': 'fa-video',
+                'audio': 'fa-music',
+                'image': 'fa-image',
+                'document': 'fa-file-pdf',
+                'archive': 'fa-file-archive',
+                'application': 'fa-cube',
+                'file': 'fa-file'
+            };
+            
+            const icon = icons[fileType] || 'fa-file';
+            const size = Math.floor(Math.random() * 50) + 1; // Simulated size
+            
+            const fileInfoHtml = `
+                <div class="queue-item">
+                    <div class="queue-icon">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="queue-info">
+                        <div class="queue-title">${filename}</div>
+                        <div class="queue-status">Size: ${size} MB | Type: ${fileType.toUpperCase()}</div>
+                    </div>
+                </div>
+            `;
+            
+            elements.fileInfo.innerHTML = fileInfoHtml;
+        },
+
+        addToQueue: function() {
+            const url = elements.urlInput.value.trim();
+            
+            if (!url) {
+                utils.showNotification('Please enter a URL first', 'error');
+                return;
+            }
+            
+            if (!utils.isValidUrl(url)) {
+                utils.showNotification('Invalid URL', 'error');
+                return;
+            }
+            
+            const fileType = utils.getFileType(url);
+            const filename = utils.extractFileName(url);
+            const platform = utils.detectPlatform(url);
+            
+            const queueItem = {
+                id: Date.now(),
+                url: url,
+                filename: filename,
+                type: fileType,
+                platform: platform,
+                status: 'pending',
+                addedAt: new Date().toLocaleTimeString()
+            };
+            
+            appState.downloadQueue.push(queueItem);
+            this.renderQueue();
+            utils.showNotification('Added to download queue', 'success');
+            utils.vibrate();
+            
+            // Switch to queue view
+            navigationManager.switchNav('queue');
+        },
+
+        renderQueue: function() {
+            if (appState.downloadQueue.length === 0) {
+                elements.queueList.innerHTML = `
+                    <p class="text-center p-20" style="color: var(--text-secondary);">
+                        No items in queue. Add links to start batch download.
+                    </p>
+                `;
+                elements.startQueueBtn.disabled = true;
+                elements.clearQueueBtn.disabled = true;
+                return;
+            }
+            
+            elements.startQueueBtn.disabled = false;
+            elements.clearQueueBtn.disabled = false;
+            
+            let queueHtml = '';
+            
+            appState.downloadQueue.forEach((item, index) => {
+                const icons = {
+                    'video': 'fa-video',
+                    'audio': 'fa-music',
+                    'image': 'fa-image',
+                    'document': 'fa-file-pdf',
+                    'archive': 'fa-file-archive',
+                    'application': 'fa-cube',
+                    'file': 'fa-file'
+                };
+                
+                const statusColors = {
+                    'pending': 'var(--text-secondary)',
+                    'downloading': 'var(--primary-color)',
+                    'completed': '#2ed573',
+                    'failed': '#ff4757'
+                };
+                
+                const icon = icons[item.type] || 'fa-file';
+                
+                queueHtml += `
+                    <div class="queue-item" data-id="${item.id}">
+                        <div class="queue-icon">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="queue-info">
+                            <div class="queue-title">${item.filename}</div>
+                            <div class="queue-status">
+                                <span style="color: ${statusColors[item.status]}">
+                                    ${item.status.toUpperCase()}
+                                </span> • 
+                                ${item.platform} • 
+                                Added: ${item.addedAt}
+                            </div>
+                        </div>
+                        <button class="queue-remove" onclick="downloadManager.removeFromQueue(${item.id})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            
+            elements.queueList.innerHTML = queueHtml;
+        },
+
+        removeFromQueue: function(id) {
+            appState.downloadQueue = appState.downloadQueue.filter(item => item.id !== id);
+            this.renderQueue();
+            utils.showNotification('Removed from queue', 'info');
+            utils.vibrate(30);
+        },
+
+        clearQueue: function() {
+            if (appState.downloadQueue.length === 0) {
+                utils.showNotification('Queue is already empty', 'info');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to clear all items from the queue?')) {
+                appState.downloadQueue = [];
+                this.renderQueue();
+                utils.showNotification('Queue cleared', 'success');
+                utils.vibrate();
+            }
+        },
+
+        startQueueDownload: async function() {
+            if (appState.downloadQueue.length === 0) {
+                utils.showNotification('Queue is empty', 'error');
+                return;
+            }
+            
+            utils.showLoader('Starting batch download...');
+            
+            for (let i = 0; i < appState.downloadQueue.length; i++) {
+                const item = appState.downloadQueue[i];
+                item.status = 'downloading';
+                this.renderQueue();
+                
+                try {
+                    await this.processDownload(item);
+                    item.status = 'completed';
+                } catch (error) {
+                    item.status = 'failed';
+                    utils.showNotification(`Failed to download: ${item.filename}`, 'error');
+                }
+                
+                this.renderQueue();
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Delay between downloads
+            }
+            
+            utils.hideLoader();
+            utils.showNotification('Batch download completed!', 'success');
+        },
+
+        processDownload: function(item) {
+            return new Promise((resolve) => {
+                utils.showLoader(`Downloading: ${item.filename}`);
+                
+                // Simulate download progress
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    utils.updateProgress(progress);
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        utils.updateProgress(0);
+                        
+                        // Add to history if not in private mode
+                        if (!appState.isPrivateMode) {
+                            this.addToHistory(item);
+                        }
+                        
+                        utils.hideLoader();
+                        resolve();
+                    }
+                }, 200);
+            });
+        },
+
+        addToHistory: function(item) {
+            const historyItem = {
+                id: Date.now(),
+                filename: item.filename,
+                type: item.type,
+                platform: item.platform,
+                downloadedAt: new Date().toLocaleString(),
+                url: item.url
+            };
+            
+            appState.downloadHistory.unshift(historyItem);
+            
+            // Keep only last 50 items
+            if (appState.downloadHistory.length > 50) {
+                appState.downloadHistory.pop();
+            }
+            
+            this.saveHistory();
+            this.renderHistory();
+        },
+
+        saveHistory: function() {
+            localStorage.setItem('snapdownload_history', JSON.stringify(appState.downloadHistory));
+        },
+
+        loadHistory: function() {
+            const savedHistory = localStorage.getItem('snapdownload_history');
+            if (savedHistory) {
+                try {
+                    appState.downloadHistory = JSON.parse(savedHistory);
+                    this.renderHistory();
+                } catch (e) {
+                    console.error('Error loading history:', e);
+                }
+            }
+        },
+
+        renderHistory: function() {
+            if (appState.downloadHistory.length === 0) {
+                elements.historyList.innerHTML = `
+                    <p class="text-center p-20" style="color: var(--text-secondary);">
+                        No download history yet.
+                    </p>
+                `;
+                elements.clearHistoryBtn.disabled = true;
+                return;
+            }
+            
+            elements.clearHistoryBtn.disabled = false;
+            
+            let historyHtml = '';
+            
+            appState.downloadHistory.forEach((item, index) => {
+                const icons = {
+                    'video': 'fa-video',
+                    'audio': 'fa-music',
+                    'image': 'fa-image',
+                    'document': 'fa-file-pdf',
+                    'archive': 'fa-file-archive',
+                    'application': 'fa-cube',
+                    'file': 'fa-file'
+                };
+                
+                const icon = icons[item.type] || 'fa-file';
+                
+                historyHtml += `
+                    <div class="history-item" onclick="downloadManager.redownloadFromHistory(${index})">
+                        <div class="history-icon">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="history-info">
+                            <div class="history-name">${item.filename}</div>
+                            <div class="history-meta">
+                                <span>${item.type.toUpperCase()}</span>
+                                <span>${item.downloadedAt}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            elements.historyList.innerHTML = historyHtml;
+        },
+
+        redownloadFromHistory: function(index) {
+            if (index >= 0 && index < appState.downloadHistory.length) {
+                const item = appState.downloadHistory[index];
+                elements.urlInput.value = item.url;
+                this.analyzeUrl();
+                utils.showNotification('URL loaded from history', 'info');
+            }
+        },
+
+        clearHistory: function() {
+            if (appState.downloadHistory.length === 0) {
+                utils.showNotification('History is already empty', 'info');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to clear all download history?')) {
+                appState.downloadHistory = [];
+                this.saveHistory();
+                this.renderHistory();
+                utils.showNotification('History cleared', 'success');
+                utils.vibrate();
+            }
+        },
+
+        setupEventListeners: function() {
+            // URL analysis
+            elements.analyzeBtn.addEventListener('click', () => this.analyzeUrl());
+            elements.urlInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.analyzeUrl();
+                }
+            });
+            
+            // Queue management
+            elements.queueBtn.addEventListener('click', () => this.addToQueue());
+            elements.startQueueBtn.addEventListener('click', () => this.startQueueDownload());
+            elements.clearQueueBtn.addEventListener('click', () => this.clearQueue());
+            
+            // History management
+            elements.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
+            
+            // Paste button
+            elements.pasteBtn.addEventListener('click', async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    elements.urlInput.value = text;
+                    utils.showNotification('URL pasted from clipboard', 'success');
+                    utils.vibrate(30);
+                } catch (err) {
+                    utils.showNotification('Failed to paste from clipboard', 'error');
+                    console.error('Failed to read clipboard:', err);
+                }
+            });
+            
+            // Quality selection
+            elements.qualityBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    elements.qualityBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    utils.vibrate(20);
+                    
+                    // Update settings based on which card is active
+                    if (appState.currentMode === 'video') {
+                        appState.settings.defaultQuality = btn.dataset.quality;
+                    } else if (appState.currentMode === 'audio') {
+                        appState.settings.defaultFormat = btn.dataset.format;
+                    }
+                });
+            });
+            
+            // Download buttons
+            elements.downloadVideoBtn.addEventListener('click', () => this.downloadVideo());
+            elements.downloadAudioBtn.addEventListener('click', () => this.downloadAudio());
+            elements.downloadImageBtn.addEventListener('click', () => this.downloadImage());
+            elements.downloadFileBtn.addEventListener('click', () => this.downloadFile());
+            elements.previewImageBtn.addEventListener('click', () => this.previewImage());
+        },
+
+        downloadVideo: function() {
+            const url = elements.urlInput.value.trim();
+            if (!this.validateUrl(url)) return;
+            
+            const quality = appState.settings.defaultQuality;
+            const filename = `${utils.extractFileName(url)}_${quality}.mp4`;
+            
+            utils.showNotification(`Starting ${quality} video download...`, 'info');
+            this.processDownload({
+                url: url,
+                filename: filename,
+                type: 'video',
+                platform: utils.detectPlatform(url)
+            });
+        },
+
+        downloadAudio: function() {
+            const url = elements.urlInput.value.trim();
+            if (!this.validateUrl(url)) return;
+            
+            const format = appState.settings.defaultFormat;
+            const filename = `${utils.extractFileName(url)}.${format}`;
+            
+            utils.showNotification(`Extracting audio (${format.toUpperCase()})...`, 'info');
+            this.processDownload({
+                url: url,
+                filename: filename,
+                type: 'audio',
+                platform: utils.detectPlatform(url)
+            });
+        },
+
+        downloadImage: function() {
+            const url = elements.urlInput.value.trim();
+            if (!this.validateUrl(url)) return;
+            
+            const filename = utils.extractFileName(url);
+            if (!filename.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
+                filename = `${filename}.jpg`;
+            }
+            
+            utils.showNotification('Downloading image...', 'info');
+            this.processDownload({
+                url: url,
+                filename: filename,
+                type: 'image',
+                platform: utils.detectPlatform(url)
+            });
+        },
+
+        downloadFile: function() {
+            const url = elements.urlInput.value.trim();
+            if (!this.validateUrl(url)) return;
+            
+            const filename = utils.extractFileName(url);
+            const fileType = utils.getFileType(url);
+            
+            utils.showNotification(`Downloading ${fileType}...`, 'info');
+            this.processDownload({
+                url: url,
+                filename: filename,
+                type: fileType,
+                platform: utils.detectPlatform(url)
+            });
+        },
+
+        previewImage: function() {
+            const url = elements.urlInput.value.trim();
+            if (!this.validateUrl(url)) return;
+            
+            window.open(url, '_blank');
+            utils.showNotification('Opening image in new tab...', 'info');
+        },
+
+        validateUrl: function(url) {
+            if (!url) {
+                utils.showNotification('Please enter a URL first', 'error');
+                return false;
+            }
+            
+            if (!utils.isValidUrl(url)) {
+                utils.showNotification('Invalid URL', 'error');
+                return false;
+            }
+            
+            return true;
+        }
+    };
+
+    // ===== APP INITIALIZATION =====
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize all managers
+        themeManager.init();
+        privacyManager.init();
+        modeManager.init();
+        navigationManager.init();
+        downloadManager.init();
+        
+        // Set up quality selection persistence
+        const savedQuality = localStorage.getItem('snapdownload_quality');
+        if (savedQuality) {
+            appState.settings.defaultQuality = savedQuality;
+            elements.qualityBtns.forEach(btn => {
+                if (btn.dataset.quality === savedQuality) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+        
+        // Set up format selection persistence
+        const savedFormat = localStorage.getItem('snapdownload_format');
+        if (savedFormat) {
+            appState.settings.defaultFormat = savedFormat;
+        }
+        
+        // Save quality/format changes
+        elements.qualityBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.quality) {
+                    localStorage.setItem('snapdownload_quality', btn.dataset.quality);
+                }
+                if (btn.dataset.format) {
+                    localStorage.setItem('snapdownload_format', btn.dataset.format);
+                }
+            });
+        });
+        
+        // Handle Android back button in WebView
+        if (window.history && window.history.pushState) {
+            window.history.pushState(null, null, window.location.href);
+            window.onpopstate = function() {
+                window.history.pushState(null, null, window.location.href);
+                utils.showNotification('Press back again to exit', 'warning');
+            };
+        }
+        
+        // Prevent accidental refresh
+        window.addEventListener('beforeunload', function(e) {
+            if (appState.downloadQueue.length > 0) {
+                e.preventDefault();
+                e.returnValue = 'You have downloads in progress. Are you sure you want to leave?';
+            }
+        });
+        
+        // Long press support for image preview
+        elements.imagePreview.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            utils.showNotification('Long press detected - Use download button to save', 'info');
+        });
+        
+        console.log('SnapDownload App fully initialized');
+        utils.showNotification('Welcome to SnapDownload!', 'success');
+    });
+
+    // ===== ERROR HANDLING =====
+    window.addEventListener('error', function(e) {
+        console.error('App error:', e.error);
+        utils.showNotification('An error occurred. Please try again.', 'error');
+    });
+
+    // Make managers available globally for inline handlers
+    window.downloadManager = downloadManager;
+</script>
+</body>
+</html>
